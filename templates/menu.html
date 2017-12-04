@@ -1,0 +1,226 @@
+{% extends "tem.html"%}
+{% block body %}
+
+
+<div class="page-header">
+	<ul class="nav nav-pills" role="tablist">
+	{% for name_table in tables %}
+		<li  class="nav-items"> 
+		<a class="nav-link" href="{{ url_for('home', table=loop.index0) }}">
+			{{ name_table }}
+		</a></li>
+	{% endfor %}
+	</ul>
+</div>
+
+<div class="container-fluid">
+{% if table is not none%}
+    <div class="col-lg-2">
+			<fieldset class="form-group" id="where">
+                <div class="col">
+                    <button id="add_where" type="button" class="btn btn-default">Добавить условие</button>
+
+                    <select name="logical"  class ="form-control">
+                        {% for x in logicals %}
+                            <option value= {{ loop.index0 }}> {{ x }} </option>
+                        {% endfor %}
+                    </select>
+
+                    <button id="send" type="button" class="btn">Поиск</button>
+                </div>
+            </fieldset>
+    </div>
+
+    <div class="col-lg-9">
+        <table class="entries table table-bordered table-hover">
+		    <thead>
+			    <tr>
+				    {% for header in title %}
+				    <th id={{ loop.index0 }}> {{ header }}
+                    </th>
+				    {% endfor %}
+			    </tr>
+		    </thead>
+		    <tbody>
+		    {% for row in entries %}
+			    <tr >
+				    {% for cell in row %}
+				    <td> {{ cell }} </td>
+				    {% endfor %}
+			    </tr>
+		    {% endfor %}
+	        </tbody>
+        </table>
+    </div>
+
+{% endif %}
+</div>
+{% endblock%}
+
+
+{% block js %}
+<script type="text/javascript">
+	$(document).ready(function() {
+    	$('table.entries').DataTable( {
+         	"ordering": false,
+        	"info": false,
+        	"searching": false,
+        	"lengthMenu": [ 5, 10, 15, 25]
+    	} );
+	} )
+
+</script>
+
+<script type="text/javascript">
+	var fields = []
+	{% for f in fields -%}
+	fields.push("{{ f }}")
+	{% endfor %}
+
+	var comps = []
+	{% for c in coms -%}
+	comps.push("{{ c }}")
+	{% endfor %}
+
+	var table = {{ table }}
+    var page_count = -1
+    var page_number
+    var sorted_fields = []
+
+	$(function(){
+				
+		$("button#send").on("click", send_parameter)
+
+		$("button#add_where").on("click", function add_button(){
+
+			var $fieldset = $("fieldset")
+			var $d_col = $("<div>", { "class": "col" })
+
+			var $select_op = $("<option>")
+			var $sel_field = $("<select>", { "class": "form-control no-arrow", "name": "fs", "id": "field_select" })
+
+			var $op
+			for (var i = 0; i < fields.length; i++){
+				$op = $select_op.clone()
+				$op.val(i)
+				$op.html(fields[i])
+				$sel_field.append($op)
+			}
+
+			var $sel_cmp = $("<select>", { "class": "form-control no-arrow", "name": "cmps"})
+			for (var i = 0; i < comps.length; i++){
+				$op = $select_op.clone()
+				$op.val(i)
+				$op.html(comps[i])
+				$sel_cmp.append($op)
+			}
+
+			var $in_value = $("<input>", { "class": "form-control", "type": "search", "name":"val", "id":"val_select"})
+
+			var $d_button = $("<div>", { "class": "col" })
+			var $button = $("<button>", { "class": "btn", "name": "vs", "onclick": "remove_condition(this)" })
+			$button.html("-")
+
+			$d_button.append($button)
+			$d_col.append($sel_field)
+			$d_col.append($sel_cmp)
+			$d_col.append($in_value)
+			$d_col.append($d_button)
+			$fieldset.append($d_col)
+
+        })
+
+        $("table.entries thead tr").find("th").on("click", function(){
+            var $this = $(this)
+            var index_sorted = sorted_fields.indexOf($this.attr("id"))
+            if (index_sorted == -1){
+                sorted_fields.push($this.attr("id"))
+                $this.addClass("active")
+                var $i = $("<i>", {"class":"fa fa-sort-asc", "aria-hidden":"true"})
+                $this.append($i)
+            }
+            else {
+                sorted_fields.splice(index_sorted, 1)
+                $this.removeClass("active")
+                $this.find("i").remove()
+            }
+        })
+
+        $("table.entries tbody").find("tr").on("click", function () {
+            
+        })
+
+	})
+
+    function send_parameter() {
+			if (!table)
+				return false;
+
+			$this = $(this)
+			$this.text("LLLL")
+            $this.removeClass("btn-danger")
+
+			var all = {}
+			var field_ops = $("select[name='fs']").find(":selected")
+			var comp_ops = $("select[name='cmps']").find(":selected")
+			var logical = $("select[name='logical']").find(":selected")
+			var value_ops = $("input[name='val']")
+
+            all.fields = []
+            all.comps = []
+            all.values = []
+            all.logical= logical.val()
+            all.order_field = sorted_fields
+
+            console.log(all.order_field)
+            for (var i = 0; i < field_ops.length; i++) {
+				all.fields.push(field_ops.eq(i).val())
+				all.comps.push(comp_ops.eq(i).val())
+				all.values.push(value_ops.eq(i).val())
+			}
+
+			$.post("{{ url_for('home', table=table) }}",
+				all,
+				function(data) {
+					console.log(data.error)
+			        if (data.error === 1) {
+                        $this.text("Проверти введенные данные")
+                        $this.attr("class", "btn btn-sm btn-danger")
+
+					}else {
+                        $this.text("Поиск")
+                        $this.removeClass("btn-danger")
+                        $this.attr("class", "btn")
+                    }
+					update_entries(data.entities)
+				})
+
+			return false;
+    }
+
+    function update_entries(entries){
+        var t = $('table.entries').DataTable()
+        t.clear().draw()
+		for (var i = 0; i < data.entries.length; i++) {
+			t.row.add(data.entries[i]).draw()
+		}
+		t.columns.adjust().draw()
+    }
+
+    function remove_condition(but) {
+		var $but = $(but)
+		var $statements = $("fieldset.form-group > div").nextAll()
+		for (var i = 0; i < $statements.length; i++)
+		 	if ($but[0] == $statements.eq(i).find("button")[0])
+		 		$statements.eq(i).remove()
+    }
+
+    function set_button_error() {
+		$b = $("button#send")
+		$b.text("ОШИБКА")
+		$b.attr("class", "btn btn-sm btn-danger")
+	}
+
+									
+</script>
+{% endblock %}

@@ -1,0 +1,26 @@
+{% extends "tem.html"%}
+{% block body %}
+
+
+<div class="page-header">
+	<ul class="nav nav-pills" role="tablist">
+	{% for name_table in tables %}
+		<li  class="nav-items"> 
+		<a class="nav-link" href="{{ url_for('get_table', table=loop.index0) }}">
+			{{ name_table }}
+		</a></li>
+	{% endfor %}
+		<li class="nav-items">
+		<a class="nav-link" href="{{ url_for('analytics') }}"> Аналитика </a> </li>
+	</ul>
+</div>
+
+
+
+{% endblock%}
+
+{% block js %}
+
+    {% include "/js/conditions.js" %}
+
+{% endblock%}

@@ -1,0 +1,176 @@
+{% extends "navigation.html" %}
+
+{%  block body %}
+{{ super() }}
+
+<div class="form-group col-lg-2">
+
+    <button id="build_table" type="button" class="btn"> Построить </button>
+
+    <div class="col">
+		<p><input type="checkbox" id="get_headers" value="l" checked>Выводить заголовки</p>
+	</div>
+
+    {% for i in range(0, 2) %}
+    <div class="col">    
+        <label for="{{ loop.cycle('x', 'y') }}" ><h5 class="text-xs-center">{{ loop.cycle('X:', 'Y:') }}</h5> </label>        
+        <select id="{{ loop.cycle('x', 'y') }}"  class ="form-control">
+        	{% for x in title %}
+            	<option value = {{ loop.index0 }}> {{ x }} </option>
+        	{% endfor %}
+    	</select>
+    </div>	
+    {% endfor %}
+
+    <div class="col">
+    	<label for="fields_table"><h5>Выберите поля</h5></label>
+    	<select multiple="{{title|length}}" id="fields_table" class="form-control" size="{{ title|length }}">
+    	{% for header in title %}
+	    	<option value = {{ loop.index0 }} selected> {{ header }} </option>
+    	{% endfor %}
+    	</select>
+	</div>
+
+	<div class="form-group">
+    	<h5> Условия </h5>
+    	{% include "conditions.html" %}
+	</div>
+
+</div>
+
+<div class="col-lg-9" style="overflow: auto;  overflow-x: auto; overflow-y: auto; height:550px; width: 1100px">
+    <table class="grouping table table-bordered table-hover"> </table>
+</div>
+
+{% endblock %}
+
+{% block js %}
+<script type="text/javascript">
+
+	{{ super() }}
+
+	function send_parameters(){
+    	var data = {}
+		var field_ops = $("select[name='fields_number']").find(":selected")
+		var comp_ops = $("select[name='comparison_operators']").find(":selected")
+		var logical = $("select[name='logical_operations']").find(":selected")
+		var value_ops = $("input[name='values']")
+
+        var x = $("select#x").find(":selected").val()
+        var y = $("select#y").find(":selected").val()
+        var target_table = $("select#fields_table").find(":selected")
+        var title = []
+
+        data.fields_number= []
+        data.comparison_operators = []
+        data.values = []
+        data.logical_operation = logical.val()
+        data.sorted_fields_number = sorted_fields
+        data.target_table = []
+
+        for (var i = 0; i < target_table.length; i++){
+            data.target_table.push(target_table[i].value)
+            title.push(target_table[i].text)
+        }
+
+        for (var i = 0; i < field_ops.length; i++) {
+			data.fields_number.push(field_ops.eq(i).val())
+			data.comparison_operators.push(comp_ops.eq(i).val())
+			data.values.push(value_ops.eq(i).val())
+		}
+
+		$.get("/analytics/" + x + "/" + y, 
+			data,
+			function(data){
+				console.log(data)
+				console.log("_______")
+				if (data.error === 1) {
+                    $("button#build_table").text("Проверти введенные данные")
+                    $("button#build_table").attr("class", "btn btn-sm btn-danger")
+				}else {
+                    $("button#build_table").text("Построить аналитику")
+                    $("button#build_table").removeClass("btn-danger")
+                    $("button#build_table").attr("class", "btn")
+                }
+				create_grouping(data.x_fields, data.y_fields, data.tables, title)
+			})
+		return false
+    }
+
+    function create_table(entries, captions=[]){
+		var $table = $("<table>", {"class": "table table-bordered table-hover"})
+		if (captions.length > 0){
+			var $thead = $("<thead>")
+			var $tr = $("<tr>")
+			for (var i = 0; i < captions.length; i++){
+				var $td = $("<td>").text(captions[i])
+				$tr.append($td)
+			}
+			$thead.append($tr)
+			$table.append($thead)
+		}
+		var $tbody = $("<tbody>")
+		for (var i = 0; i < entries.length; i++) {
+			var $tr = $("<tr>")
+			for (var j = 0; j < entries[i].length; j++) {
+				var $td = $("<td>").text(entries[i][j])
+				$tr.append($td)
+			}
+			$tbody.append($tr)
+		}
+		$table.append($tbody)
+		return $table
+    }
+
+    function create_grouping(x_fields, y_fields, entries, title){
+    	var displayTitle = $('#get_headers:checked').length > 0
+    	$("table.grouping").children().remove()
+    	var $grouping = $("table.grouping")
+
+    	
+    	var title_tables = []
+    	if (displayTitle){
+    		title_tables = title
+    	}
+
+    	var $thead = $("<thead>")
+    	var $tr = $("<tr>")
+    	$tr.append($("<th>"))
+    	for (var i = 0; i < x_fields.length; i++){
+    		$th = $("<th>").text(x_fields[i])
+    		$th.css({"text-align": "center"})
+    		$tr.append($th)
+    	}
+    	$thead.append($tr)
+    	$grouping.append($thead)
+
+    	$tbody = $("<tbody>")
+    	for (var i = 0; i < y_fields.length; i++){
+    		var $tr = $("<tr>")
+    		var $th = $("<th>").text(y_fields[i])
+    		$th.css({"text-align": "center"})
+    		$tr.append($th)
+    		for (var j = 0; j < x_fields.length; j++){
+    			var $td = $("<td>")
+    			if (y_fields[i] in entries[x_fields[j]]){
+    				console.log("YES")
+    				$table = create_table(entries[x_fields[j]][y_fields[i]], title_tables) 
+    				$td.append($table)
+    			}
+    			$tr.append($td)
+    		}
+    		$tbody.append($tr)
+    	}
+    	$grouping.append($tbody)
+    	
+    }
+
+
+
+    $(function(){	
+		$("button#add_where").on("click", add_button)
+		$("button#build_table").on("click", send_parameters)
+    })
+
+</script>
+{% endblock %}

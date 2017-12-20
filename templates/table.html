@@ -1,0 +1,223 @@
+{% extends "navigation.html"%}
+
+{% block body %}
+
+{{ super() }}
+
+<div class="container">
+	{% if table_number != -1 %}
+
+	<div class="col-lg-2">
+        <div class="form-group">
+			<button id="insert" type="button" class="btn">Вставить новую запись</button>
+		</div>
+		<div class="form-group"> <button id="send" type="button" class="btn">Поиск</button> </div> 
+		{% include "conditions.html" %}
+    </div>
+
+    <div class="col-lg-9">
+    	<div class="row">
+    		<div class="col-sm-2">
+    		<select name="page_size" class ="form-control">
+                {% for x in page_sizes %}
+                    <option value= {{ x }}> {{ x }} </option>
+                {% endfor %}
+            </select>
+        	</div>
+    	</div>
+    	<div class="row-sm form-group">
+			<ul id="pagination" class="pagination">
+			</ul>
+		</div>
+        <table class="entries table table-bordered table-hover">
+		    <thead>
+			    <tr>
+				    {% for header in title %}
+				    <th id={{ loop.index0 }}> {{ header }}
+                    </th>
+				    {% endfor %}
+			    </tr>
+		    </thead>
+		    <tbody>
+		    {% for i in range(0, entries|length) %}
+			    <tr data-id ="{{ entries[i][index_id]}}">
+				    {% for cell in entries[i] %}
+				    <td  > {{ cell }} </td>
+				    {% endfor %}
+			    </tr>
+		    {% endfor %}
+	        </tbody>
+        </table>
+    </div>
+    {% endif %}
+</div>
+{% endblock%}
+
+{% block js %}
+<script type="text/javascript">
+	{{ super() }}
+
+	var table_number = {{ table_number }}
+    var count_page = {{ count_page }}
+    var page_number = {{ page_number }}
+
+    function send_parameters() {
+		$this = $(this)
+		$this.text("LLLL")
+        $this.removeClass("btn-danger")
+
+		var data = {}
+		var field_ops = $("select[name='fields_number']").find(":selected")
+		var comp_ops = $("select[name='comparison_operators']").find(":selected")
+		var logical = $("select[name='logical_operations']").find(":selected")
+		var value_ops = $("input[name='values']")
+		var page_size = $("select[name='page_size']").find(":selected")
+
+		data.is_update_table = 1
+        data.fields_number= []
+        data.comparison_operators = []
+        data.values = []
+        data.logical_operation = logical.val()
+        data.sorted_fields_number = sorted_fields
+
+        data.page_size = page_size.val()
+        data.count_page = count_page
+        data.page_number = page_number
+
+        for (var i = 0; i < field_ops.length; i++) {
+			data.fields_number.push(field_ops.eq(i).val())
+			data.comparison_operators.push(comp_ops.eq(i).val())
+			data.values.push(value_ops.eq(i).val())
+		}
+
+		$.get("{{ url_for('get_table', table=table_number) }}", data,
+			function(data){
+
+				if (data.error === 1) {
+                    $this.text("Проверти введенные данные")
+                    $this.attr("class", "btn btn-sm btn-danger")
+				}else {
+                    $this.text("Поиск")
+                    $this.removeClass("btn-danger")
+                    $this.attr("class", "btn")
+                }
+				count_page = data.count_page
+
+				update_table(data)
+				update_pagination(count_page, page_number)
+			})
+
+		return false;
+    }
+
+    function update_table(data){
+        $("table.entries > tbody").remove()
+		var $table = $("table.entries")
+		var $tbody = $("<tbody>")
+		for (var i = 0; i < data.entries.length; i++) {
+			var $tr = $("<tr data-id=" + data.entries[i][data.index_id] + ">")
+			$tr.on("click", open_update_editor)
+			for (var j = 0; j < data.entries[i].length; j++) {
+				var $td = $("<td>").text(data.entries[i][j])
+				$tr.append($td)
+			}
+			$tbody.append($tr)
+		}
+		$table.append($tbody)
+    }
+
+
+    function update_pagination(count, selected_page) {
+		$this = $("ul#pagination")
+		$this.children().remove()
+		if (count <= 1 || !count) return
+
+		$li = $("<li class=\"page-item\"></li>")
+		$p = $("<a class='page-link' onclick='page_click(this)'></a>")
+
+		$li_l = $li.clone()
+		$p_c = $p.clone()
+
+		$p_c.text("«")
+		$p_c.data("value", "prev")
+		$li_l.append($p_c)
+
+		$li_r = $li.clone()
+		$p_c = $p.clone()
+
+		$p_c.text("»")
+		$p_c.data("value", "next")
+		$li_r.append($p_c)
+
+		if (selected_page == 0)
+			$li_l.addClass("disabled")
+		else if (selected_page == count - 1)
+			$li_r.addClass("disabled")
+
+		$this.append($li_l)
+		for (var i = 0; i < count; i++) {
+			$li_c = $li.clone()
+			$p_c = $p.clone()
+			$p_c.data("value", i)
+			$p_c.text(i + 1)
+			
+			if (i == selected_page)
+				$li_c.addClass("active")
+
+			$li_c.append($p_c)
+			$this.append($li_c)
+		}
+		$this.append($li_r)						
+	}
+
+	function page_click(a) {
+		$a = $(a)
+		var p = $a.data("value")
+		if (p === "prev")
+			p = Math.max(page_number - 1, 0)
+		else if (p === "next")
+			p = Math.min(page_number + 1, count_page - 1)
+		page_number = p
+		send_parameters()
+	}
+
+
+    function open_update_editor(){
+    	var id = $(this).data("id")
+    	var w = window.open("/update/" + table_number + "/" + id)
+    	console.log(w)
+    }
+
+    function open_insert_editor(){
+    	window.open("{{ url_for('window_insert', table=table_number) }}")
+    	//w.onclose = send_parameters
+    }
+
+	$(function(){	
+		$("button#send").on("click", send_parameters)
+		$("button#add_where").on("click", add_button)
+        $("table.entries thead tr").find("th").on("click", add_or_remove_sort)
+        $("table.entries tbody tr").on("click", open_update_editor)
+        $("button#insert").on("click", open_insert_editor)
+        $("select[name='page_size']").on("change", 
+        	function(){
+        		page_number = 0
+        		send_parameters()
+        	})
+        update_pagination(count_page, page_number)
+
+        window.onchildclose = function() {
+			child_closed = true
+		}
+		$(window).focus(function() {
+			if (child_closed) {
+				send_parameters()
+				child_closed = false
+			}
+		})
+
+    })
+
+</script>
+{% endblock %}
+

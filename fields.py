@@ -1,9 +1,12 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 
 class Column:
-	def __init__(self, name, title, convert=None):
+	def __init__(self, name, title, convert=None, type=None):
 		self._name = name
 		self._title = title
 		self._convert = convert
+		self.type = type
 
 	@property
 	def title(self):
@@ -13,24 +16,24 @@ class Column:
 	def name(self):
 		return self._name
 
-	def convert(self, value):
+	def convert(self, value): 
 		return self._convert(value)
 
-	def check_type(self, value):
-		try:
-			value = self.convert(value)
-		except ValueError:
-			value = None
-		return isinstance(value, self._convert)
+	#def check_type(self, value):
+	#	try:
+	#		value = self.convert(value)
+	#	except ValueError:
+	#		value = None
+	#	return isinstance(value, self._convert)
 		
 
 class Integer(Column):
-	def __init__(self, name, title):
-		super().__init__(name, title, int)
+	def __init__(self, name, title, not_null=False):
+		super().__init__(name, title, decorator_convert(int, not_null), 'number')
 
 class String(Column):
-	def __init__(self, name, title):
-		super().__init__(name, title, str)
+	def __init__(self, name, title, not_null=False):
+		super().__init__(name, title, decorator_convert(str, not_null), 'text')
 
 class ForeignKey(Column):
 	def __init__(self, name, title, reference_table, reference_field, target_name):
@@ -52,8 +55,16 @@ class ForeignKey(Column):
 	def target(self):
 		return {'table': self._reference_table.name, 'column': self._target_name}
 
-	def check_type(self, value):
-		return self._reference_table.get_column(self._target_name).check_type(value) 
-
 	def convert(self, value):
 		return self._reference_table.get_column(self._target_name).convert(value)
+		
+
+def decorator_convert(f, not_null):
+	def wrapper(value):
+		if value is None or not value:
+			print(not_null)
+			if not_null:
+				raise ValueError("Тип not_null")
+			return None
+		return f(value)
+	return wrapper 

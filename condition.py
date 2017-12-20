@@ -1,3 +1,6 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
 class LogicalOperator:
 	def __init__(self, operation, caption):
 		self._operation = operation

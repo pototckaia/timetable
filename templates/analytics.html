@@ -5,31 +5,42 @@
 
 <div class="form-group col-lg-2">
 
-    <button id="build_table" type="button" class="btn"> Построить </button>
+    <div class="form-group col"><button id="build_table" type="button" class="btn btn-default"> Построить </button></div>
 
     <div class="col">
-		<p><input type="checkbox" id="get_headers" value="l" checked>Выводить заголовки</p>
+		<input type="checkbox" id="get_headers" value="l" checked>
+        <label for="get_headers"><p  style="font-weight: 400;">Выводить заголовки</p> </label>
+	</div>
+
+    <div class="col">
+        <label for="show_count"><p style="font-weight: 400;">Показывать при сокрытии</p></label>
+        <input class="form-control" id="show_count" type="number" value="0"  min="0">
 	</div>
 
     {% for i in range(0, 2) %}
     <div class="col">    
         <label for="{{ loop.cycle('x', 'y') }}" ><h5 class="text-xs-center">{{ loop.cycle('X:', 'Y:') }}</h5> </label>        
         <select id="{{ loop.cycle('x', 'y') }}"  class ="form-control">
-        	{% for x in title %}
+        	{% for x in coordinates %}
+                {% if loop.index0 != id_index %}
             	<option value = {{ loop.index0 }}> {{ x }} </option>
+                {% endif %}
         	{% endfor %}
     	</select>
     </div>	
     {% endfor %}
 
-    <div class="col">
-    	<label for="fields_table"><h5>Выберите поля</h5></label>
-    	<select multiple="{{title|length}}" id="fields_table" class="form-control" size="{{ title|length }}">
-    	{% for header in title %}
-	    	<option value = {{ loop.index0 }} selected> {{ header }} </option>
-    	{% endfor %}
-    	</select>
-	</div>
+    <label for="fields_table"><h5  class="text-xs-center">Поля:</h5></label>
+    <div class="col panel panel-default" id="fields_table">
+        <div class="col panel-body" id="fields_table">
+            {% for header in title_columns %}
+                <div class="col">
+                <label style="font-weight: 400;">
+                    <input type="checkbox" name="option" checked value='{{ loop.index0 }}'/>{{ header }}</label>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
 
 	<div class="form-group">
     	<h5> Условия </h5>
@@ -37,9 +48,10 @@
 	</div>
 
 </div>
-
-<div class="col-lg-9" style="overflow: auto;  overflow-x: auto; overflow-y: auto; height:550px; width: 1100px">
-    <table class="grouping table table-bordered table-hover"> </table>
+<div class="col-lg-9" >
+    <div id="table-scroll" {#style="overflow-y: auto; height: 100vh"#}>
+            <table class="grouping table table-bordered table-hover"> </table>
+    </div>
 </div>
 
 {% endblock %}
@@ -48,6 +60,19 @@
 <script type="text/javascript">
 
 	{{ super() }}
+
+    var fields = []
+    {% for t in title_columns -%}
+    fields.push("{{ t }}")
+    {% endfor %}
+
+    var compares = []
+    {% for c in comparison_operators -%}
+    compares.push("{{ c }}")
+    {% endfor %}
+    {% include 'js/conditions.js' %}
+    var child_closed=false
+
 
 	function send_parameters(){
     	var data = {}
@@ -58,19 +83,18 @@
 
         var x = $("select#x").find(":selected").val()
         var y = $("select#y").find(":selected").val()
-        var target_table = $("select#fields_table").find(":selected")
+        var target_table = $("input[name='option']:checked")
         var title = []
 
         data.fields_number= []
         data.comparison_operators = []
         data.values = []
         data.logical_operation = logical.val()
-        data.sorted_fields_number = sorted_fields
         data.target_table = []
 
         for (var i = 0; i < target_table.length; i++){
-            data.target_table.push(target_table[i].value)
-            title.push(target_table[i].text)
+            data.target_table.push(target_table.eq(i).val())
+            title.push(target_table.eq(i).parent().text())
         }
 
         for (var i = 0; i < field_ops.length; i++) {
@@ -79,65 +103,82 @@
 			data.values.push(value_ops.eq(i).val())
 		}
 
-		$.get("/analytics/" + x + "/" + y, 
+		$.get("/analytics/{{ table_number }}/" + x + "/" + y,
 			data,
 			function(data){
-				console.log(data)
-				console.log("_______")
+                var $buttom = $("button#build_table")
 				if (data.error === 1) {
-                    $("button#build_table").text("Проверти введенные данные")
-                    $("button#build_table").attr("class", "btn btn-sm btn-danger")
+                    $buttom.text("Проверти введенные данные")
+                    $buttom.attr("class", "btn btn-sm btn-danger")
 				}else {
-                    $("button#build_table").text("Построить аналитику")
-                    $("button#build_table").removeClass("btn-danger")
-                    $("button#build_table").attr("class", "btn")
+                    $buttom.text("Построить")
+                    $buttom.removeClass("btn-danger")
+                    $buttom.attr("class", "btn btn-default")
                 }
 				create_grouping(data.x_fields, data.y_fields, data.tables, title)
 			})
 		return false
     }
 
-    function create_table(entries, captions=[]){
-		var $table = $("<table>", {"class": "table table-bordered table-hover"})
-		if (captions.length > 0){
-			var $thead = $("<thead>")
-			var $tr = $("<tr>")
-			for (var i = 0; i < captions.length; i++){
-				var $td = $("<td>").text(captions[i])
-				$tr.append($td)
-			}
-			$thead.append($tr)
-			$table.append($thead)
-		}
-		var $tbody = $("<tbody>")
+    function create_list(entries, captions, where){
 		for (var i = 0; i < entries.length; i++) {
-			var $tr = $("<tr>")
-			for (var j = 0; j < entries[i].length; j++) {
-				var $td = $("<td>").text(entries[i][j])
-				$tr.append($td)
+            var $ul = $("<ul>", {"class": "list_row list-group list-group-item-action"})
+
+            var $div_i = $("<div>", {"class": "col ul_row", 'id': String(i), "data-id": entries[i][0]})
+            $div_i.draggable({
+                zIndex: 100,
+                addClasses: false,
+                helper: "clone",
+                containment: $("table.grouping"),
+                scroll: true
+            })
+
+            var $li = $("<li>", {"class": "list-group-item"})
+            $li.css({"text-align": "center"})
+
+            for (var j = 1; j < entries[i].length; j++) {
+			    var text = ''
+			    if (captions[j - 1] !== ''){ text = captions[j - 1] + "  : <br/> " }
+                text += entries[i][j]
+
+                var $li_c = $li.clone()
+                $li_c.html(text)
+				$ul.append($li_c)
 			}
-			$tbody.append($tr)
+
+			var $button = $("<button>", {"class": "btn btn-link", "name": "update", "data-id": entries[i][0]}).text('Редактировать')
+            $button.on("click", open_update_editor)
+
+            $li.append($button)
+            $ul.append($li)
+
+            $div_i.append($ul)
+            where.append($div_i)
 		}
-		$table.append($tbody)
-		return $table
     }
 
     function create_grouping(x_fields, y_fields, entries, title){
     	var displayTitle = $('#get_headers:checked').length > 0
-    	$("table.grouping").children().remove()
-    	var $grouping = $("table.grouping")
+        var $grouping = $("table.grouping")
+        $grouping.children().remove()
 
     	
     	var title_tables = []
     	if (displayTitle){
     		title_tables = title
     	}
+    	else{
+    	    title_tables = []
+            for (var i = 0; i < title.length; i++){
+    	        title_tables.push('')
+            }
+        }
 
     	var $thead = $("<thead>")
     	var $tr = $("<tr>")
     	$tr.append($("<th>"))
     	for (var i = 0; i < x_fields.length; i++){
-    		$th = $("<th>").text(x_fields[i])
+    		$th = $("<th>").text(x_fields[i][0])
     		$th.css({"text-align": "center"})
     		$tr.append($th)
     	}
@@ -145,18 +186,38 @@
     	$grouping.append($thead)
 
     	$tbody = $("<tbody>")
+
+
     	for (var i = 0; i < y_fields.length; i++){
     		var $tr = $("<tr>")
-    		var $th = $("<th>").text(y_fields[i])
+    		var $th = $("<th>").text(y_fields[i][0])
     		$th.css({"text-align": "center"})
     		$tr.append($th)
     		for (var j = 0; j < x_fields.length; j++){
-    			var $td = $("<td>")
-    			if (y_fields[i] in entries[x_fields[j]]){
-    				console.log("YES")
-    				$table = create_table(entries[x_fields[j]][y_fields[i]], title_tables) 
-    				$td.append($table)
+
+    		    var $td = $("<td>", {"data-xval": x_fields[j][1], "data-yval": y_fields[i][1]})
+
+                var $button_insert = $("<button>", {"class": "btn btn-sm btn-success", "name":"insert"}).text("+")
+                $button_insert.on("click", open_insert_editor)
+                $td.append($button_insert)
+
+                var $button_hidden = $("<button>", {"class": "btn btn-sm btn-default", "name":"insert"})
+                var $span = $("<span>", {"class": "tt"}).text("Скрыть")
+                var $i = $("<i>", {"class":"fa fa-sort-asc", "aria-hidden":"true"})
+                $button_hidden.append($i)
+                $button_hidden.append($span)
+                $button_hidden.on("click", show_or_hide)
+                $td.append($button_hidden)
+
+                $td.droppable({
+                    addClasses: false,
+                    drop: drop_tr
+                })
+
+                if (y_fields[i][0] in entries[x_fields[j][0]]){
+                    create_list(entries[x_fields[j][0]][y_fields[i][0]], title_tables, $td)
     			}
+
     			$tr.append($td)
     		}
     		$tbody.append($tr)
@@ -165,12 +226,156 @@
     	
     }
 
+    function show_or_hide(){
 
+        var $div = $(this).parent()
+        var min_i = $("#show_count").val()
+        var $text =$(this).children(".tt")
+        var $i = $(this).children(".fa")
+        var hidden = $i.hasClass("fa-sort-desc")
+        if ($i.hasClass("fa-sort-asc")){
+            $text.text("Показать")
+            $i.removeClass("fa-sort-asc")
+            $i.addClass("fa-sort-desc")
+        }
+        else {
+            $text.text("Скрыть")
+            $i.removeClass("fa-sort-desc")
+            $i.addClass("fa-sort-asc")
+        }
 
-    $(function(){	
+        console.log(' ')
+        $div.children(".ul_row").each(
+            function(i){
+                var $div = $(this)
+                if (i < min_i || hidden){
+                    $div.removeClass("hidden")
+                }
+                else if (!hidden){
+                    $div.addClass("hidden")
+                }
+            }
+        )
+    }
+
+    function drop_tr(event, ui) {
+        var x = $("select#x").find(":selected").val()
+        var y = $("select#y").find(":selected").val()
+        var $this = $(this)
+        var x_val = $(this).data("xval")
+        var y_val = $(this).data("yval")
+        if (x === y){return }
+
+        var inventor = ui.draggable;
+        var id_row = inventor.data("id")
+        var $helper = $(ui.helper)
+
+        var data = {}
+        data.values = []
+        data.values.push(x_val);
+        data.values.push(y_val);
+        data.fields_number = []
+        data.fields_number.push(x)
+        data.fields_number.push(y)
+
+        $.post("{{ url_for('update_row', table=table_number) }}" + "/" + String(id_row),
+            data,
+            function(data){
+                if (data.error === 1) {
+                    console.log("LLLLLLL")
+				}else {
+                    $new_ul = create_ul($(inventor).find('ul'), data.current_row)
+                    $(inventor).find('ul').remove()
+                    $(inventor).append($new_ul)
+
+                    $this.append(inventor[0]);
+                    $helper.remove();
+                }
+            }
+        )
+    }
+
+    function create_ul(ul, row){
+        var target_table = $("input[name='option']:checked")
+        var title = []
+        var displayTitle = $('#get_headers:checked').length > 0
+
+        for (var i = 0; i < target_table.length; i++){
+            title.push(target_table.eq(i).parent().text())
+            target_table[i] = target_table.eq(i).val()
+        }
+
+        var $ul = $("<ul>", {"class": "list_row list-group list-group-item-action"})
+        var $li = $("<li>", {"class": "list-group-item"})
+        $li.css({"text-align": "center"})
+
+        for (var j = 0; j < target_table.length; j++) {
+            var text = ''
+            if (displayTitle){ text = title[j] + "  : <br/> " }
+            text += row[target_table[j]]
+
+            var $li_c = $li.clone()
+            $li_c.html(text)
+            $ul.append($li_c)
+        }
+
+        var $button = ul.find("button[name='update']").clone()
+        $button.on('click', open_update_editor)
+
+        $li.append($button)
+        $ul.append($li)
+        return $ul
+    }
+
+    function open_update_editor(){
+    	var id = $(this).data("id")
+    	var w = window.open("/update/" + {{ table_number }} + "/" + id)
+
+    }
+
+    function open_insert_editor(){
+        var x = $("select#x").find(":selected").val()
+        var y = $("select#y").find(":selected").val()
+        var $this = $(this)
+        var x_val = $(this).parent().data("xval")
+        var y_val = $(this).parent().data("yval")
+        if (x === y){return }
+
+    	var w = window.open("{{ url_for('create_insert_card', table=table_number) }}")
+        w.addEventListener('load', function(){
+            w.set_value(x_val, x)
+            w.set_freeze(x)
+
+            w.set_value(y_val, y)
+            w.set_freeze(y)
+        }, true);
+
+    }
+
+    $(function(){
 		$("button#add_where").on("click", add_button)
 		$("button#build_table").on("click", send_parameters)
+        $("select#x").on("change", send_parameters)
+        $("select#y").on("change", send_parameters)
+        $("#get_headers").on("change", send_parameters)
+        $("input[name='option']").each(
+            function(e){
+               $(this).on("change", send_parameters)
+            }
+        )
+
+        window.onchildclose = function() {
+			child_closed = true
+		}
+		$(window).focus(function() {
+			if (child_closed) {
+				send_parameters()
+				child_closed = false
+			}
+		})
     })
+
+
 
 </script>
 {% endblock %}

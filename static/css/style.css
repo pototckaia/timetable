@@ -1,5 +1,13 @@
+table.grouping {
+    display: table;
+    width: 100%;
+}
 
-th.grouping, tr.grouping, td.grouping {
-	text-align: center;
-	border: 1px solid palegreen;
+table.grouping > tbody {
+    overflow-y: auto;
+     height: 100vh
+}
+table.grouping  > tr {
+      display: block;
+      position: relative;
 }

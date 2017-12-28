@@ -1,272 +1,135 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-
 from flask import Flask, request, render_template, g, jsonify
-import condition
+import condition as cond
 from tables import BaseTable
-import fdb
-from math import ceil
+
 from collections import OrderedDict
 
 
 app = Flask(__name__)
 
-
-def get_db():
-	if not hasattr(g, "fb_db"):
-		g.fb_db = fdb.connect(
-		dsn='db/TIMETABLE.fdb',
-		user='sysdba',
-		password='masterkey',
-		charset=u'UTF8'
-	)
-	return g.fb_db
-
-def commit():
-	get_db().commit()
-
-def execute_edit(smth, val=()):
-	print()
-	print(smth)
-	print(val)
-	cur = get_db().cursor()
-	cur.execute(smth, val)
-
-def execute(smth, val=()):
-	print()
-	print(smth)
-	print(val)
-	cur = get_db().cursor()
-	cur.execute(smth, val)
-	return cur.fetchall()
-
 @app.teardown_appcontext
 def close_db(error):
-	if hasattr(g, "man"):
+	if hasattr(g, 'fb_db'):
 		g.fb_db.close()
 
-
-@app.route("/", methods=['GET'])
-def get_meta_data():
+def get_metadate():
 	data = {}
-	list_tables = BaseTable.tables()
-	list_logical_operators = condition.LogicalOperator.logical_operations()
-	list_comparison_operators = condition.Compare.comparison_operators()
-
-	data['tables'] = [x.caption for x in list_tables]
-	data['comparison_operators'] = [x.caption for x in list_comparison_operators]
-	data['logical_operations'] = [x.caption for x in list_logical_operators]
+	data['tables'] = [x.caption for x in BaseTable.tables()]
+	data['comparison_operators'] = [x.caption for x in cond.Compare.comparison_operators()]
+	data['logical_operations'] = [x.caption for x in cond.LogicalOperator.logical_operations()]
 	data['page_sizes'] = [5, 10, 15, 25]
-	data['page_size'] = 5
-	data['count_page'] = 0
-	data['page_number'] = 0
 	data['table_number'] = -1
+	print(data['tables'])
+	return data
 
-	return render_template("table.html", **data)
+def get_current_table(index):
+	return BaseTable.tables()[index]
 
-@app.route("/<int:table>", methods=['GET'])
+@app.route('/', methods=['GET'])
+def home():
+	data = get_metadate()
+	return render_template("base.html", **data)
+
+@app.route("/select", methods=['GET'])
+def select_table():
+	data = get_metadate()
+	data['url'] = 'get_table'
+	return render_template("navigation.html", **data)
+
+@app.route("/select/<int:table>", methods=['GET'])
 def get_table(table):
-	data = {}
+	data = get_metadate()
+	if table < 0 or table >= len(data['tables']): return
 
-	list_tables = BaseTable.tables()
-	list_logical_operators = condition.LogicalOperator.logical_operations()
-	list_comparison_operators = condition.Compare.comparison_operators()
+	current_table = get_current_table(table)
+	data['url'] = 'get_table'
+	data['title_columns'] = current_table.fields_title()
+	data['table_number'] = table
+	data['index_id'] = current_table.get_index_id()
+	is_update_table = request.args.get('is_update_table', type=int)
 
-	data['tables'] = [x.caption for x in list_tables]
-	data['comparison_operators'] = [x.caption for x in list_comparison_operators]
-	data['logical_operations'] = [x.caption for x in list_logical_operators]
-	data['page_sizes'] = [5, 10, 15, 25]
-	data['table_number'] = -1
+	if is_update_table is None:
+		data['page_size'] = 5
+		data['count_page'] = current_table.get_count_page(page_size=data['page_size'])
+		data['page_number'] = 0
+		data['entries'] = current_table.select(pagination=(data['page_size'], data['page_size'] * data['page_number']))
+		return render_template('table.html', **data)
 
-	if 0 <= table < len(list_tables):
-		current_table = list_tables[table]
+	fields_number = request.args.getlist('fields_number[]', type=int)
+	compare_number = request.args.getlist('comparison_operators[]', type=int)
+	values = request.args.getlist('values[]')
+	logical_number = request.args.get('logical_operation', type=int)
+	sorted_fields_number = request.args.getlist('sorted_fields_number[]', type=int)
 
-		data['title'] = current_table.fields_title()
-		data['table_number'] = table
-		data['index_id'] = current_table.get_index_id()
+	data['page_size'] = request.args.get('page_size', type=int)
+	data['count_page'] = request.args.get('count_page', type=int)
+	data['page_number'] = request.args.get('page_number', type=int)
 
-		is_update_table = request.args.get('is_update_table', type=int)
-		if is_update_table is None:
-			page_number = 0
-			page_size = 5
-			count_page = execute(current_table.get_count())[0][0]
-			count_page = ceil(count_page / page_size)
+	try:
+		conditions = cond.Conditions(columns=current_table.convert_to_columns(fields_number),
+									 comparison_number=compare_number,
+									 logical_number=logical_number,
+									 values=values)
+		data['count_page'] = current_table.get_count_page(conditions=conditions, page_size=data['page_size'])
+		data['page_number'] = 0 if data['count_page'] - 1 < data['page_number'] else data['page_number']
+		data['entries'] = current_table.select(conditions=conditions,
+											   sorted_fields_number=sorted_fields_number,
+											   pagination=(data['page_size'], data['page_size'] * data['page_number']))
+		data['error'] = 0
+	except ValueError:
+		data['error'] = 1
 
-			data['page_size'] = page_size
-			data['count_page'] = count_page
-			data['page_number'] = page_number
-
-			data['entries'] = execute(current_table.select(pagination=True), (page_size, page_size * page_number))
-			return render_template("table.html", **data)
-
-		fields_number = request.args.getlist("fields_number[]", type=int)
-		compare_number = request.args.getlist("comparison_operators[]", type=int)
-		values = request.args.getlist("values[]")
-		logical_number = request.args.get("logical_operation", type=int)
-		sorted_fields_number = request.args.getlist("sorted_fields_number[]", type=int)
-
-		page_size = request.args.get("page_size", type=int)
-		page_number = request.args.get("page_number", type=int)
-		count_page = request.args.get("count_page", type=int)
-
-		logical_operator = list_logical_operators[logical_number] if logical_number is not None else None
-		comparison_operators = [list_comparison_operators[i] for i in compare_number] if compare_number else []
-
-		data['page_size'] = page_size
-		data['count_page'] = count_page
-		data['page_number'] = page_number
-
-		try:
-			values = current_table.convert_values(fields_number=fields_number, values=values)
-			count_page = execute(current_table.get_count(fields_number=fields_number, comparison_operators=comparison_operators,
-				logical_operator=logical_operator), values)[0][0]
-			sql = current_table.select(fields_number=fields_number, comparison_operators=comparison_operators,
-				logical_operator=logical_operator, sorted_fields_number=sorted_fields_number, pagination=True)
-
-			data['entries'] = execute(sql, (page_size, page_size * page_number) + values)
-			data['count_page'] = ceil(count_page / page_size)
-
-			data['error'] = 0
-		except ValueError:
-			data['error'] = 1
-
-		return jsonify(data)
-
-###
-
-@app.route("/update/<int:table>", methods=['GET', 'POST'])
-@app.route("/update/<int:table>/<int:id_row>", methods=['GET', 'POST'])
-def window_editor(table=None, id_row=None):
-	list_tables = BaseTable.tables()
-	if table < 0 or table >= len(list_tables):
-		return
-
-	current_table = list_tables[table]
-	data = {}
-	data['legend'] = 'Обновление записи с идентификатор ' + str(id_row)
-	data['table'] = table
-	data['id_row'] = id_row
-	data['title_columns'] = current_table.fields_title(skipped_field='id')
-
-	current_row = current_table.get_row(id_row, execute)
-	out_val = current_table.get_output_values(execute)
-
-	data['output_values'] = out_val
-	data['cur_id'] = id_row
-	data['current_row'] = current_row
-
-
-	if request.method == 'POST':
-		values = [request.form.get(str(i), None) for i in range(0, len(out_val))]
-		#row = request.form.getlist('current_row[]')
-		#print('row', row)
-
-		try:
-			values = current_table.convert_all_values(values)
-			current_table.check_for_existence(values, execute)
-
-			execute_edit(current_table.update_by_id(), tuple(values + [id_row]))
-			commit()
-
-			data['current_row'] = current_table.get_row(id_row, execute)
-			data['error'] = 0
-		except ValueError:
-			data['current_row'] = current_table.get_row(id_row, execute)
-			data['error'] = 1
-
-	return render_template("update.html", **data)
-
-
-@app.route("/insert/<int:table>", methods=['GET', 'POST'])
-def window_insert(table):
-	list_tables = BaseTable.tables()
-	if table < 0 or table >= len(list_tables):
-		return
-
-	current_table = list_tables[table]
-
-	data = {}
-	data['legend'] = 'Вставить новую запись в таблицу ' + current_table.caption
-	data['title_columns'] = current_table.fields_title(skipped_field='id')
-
-	out_val = current_table.get_output_values(execute)
-	data['output_values'] = out_val
-
-
-	if request.method == 'POST':
-		values = [request.form.get(str(i), None) for i in range(0, len(out_val))]
-		try:
-			values = current_table.convert_all_values(values)
-			current_table.check_for_existence(values, execute)
-
-			execute_edit(current_table.insert(), tuple(values))
-			commit()
-			data['window_close'] = True
-		except ValueError:
-			data['error'] = 1
-
-	return render_template("insert.html", **data)
-
-@app.route("/delete/<int:table>/<int:id_row>", methods=['POST'])
-def delete_row(table, id_row):
-	list_table = BaseTable.tables()
-	if table < 0 or table >= len(list_table):
-		return
-
-	current_table = list_table[table]
-	test = current_table.get_row(id_row, execute)
-	execute_edit(current_table.delete_by_id(), (id_row, ))
-	commit()
-	data = {}
 	return jsonify(data)
 
-
-@app.route("/analytics/")
+@app.route('/analytics')
 def analytics():
-	data = {}
-	list_tables = BaseTable.tables()
-	list_logical_operators = condition.LogicalOperator.logical_operations()
-	list_comparison_operators = condition.Compare.comparison_operators()
-	current_table = BaseTable.tables()[8]
-	data['tables'] = [x.caption for x in list_tables]
-	data['title'] = current_table.fields_title()
-	data['comparison_operators'] = [x.caption for x in list_comparison_operators]
-	data['logical_operations'] = [x.caption for x in list_logical_operators]
-	return render_template("analytics.html", **data)
- 
-@app.route("/analytics/<int:x>/<int:y>", methods=['GET'])
-def build_table(x, y):
+	data = get_metadate()
+	data['url'] = 'analytics_metadate'
+	return render_template('navigation.html', **data)
 
-	list_logical_operators = condition.LogicalOperator.logical_operations()
-	list_comparison_operators = condition.Compare.comparison_operators()
+@app.route('/analytics/<int:table>', methods=['GET'])
+def analytics_metadate(table):
+	data = get_metadate()
+	if table < 0 or table >= len(data['tables']): return
 
-	fields_number = request.args.getlist("fields_number[]", type=int)
-	compare_number = request.args.getlist("comparison_operators[]", type=int)
-	values = request.args.getlist("values[]")
-	logical_number = request.args.get("logical_operation", type=int)
-	target_table = request.args.getlist("target_table[]", type=int)
-	sorted_fields_number = request.args.getlist("sorted_fields_number[]", type=int)
-	current_table = BaseTable.tables()[8]
-	
-	logical_operator = list_logical_operators[logical_number] if logical_number is not None else None
-	comparison_operators = [list_comparison_operators[i] for i in compare_number] if compare_number else []
+	data['url'] = 'analytics_metadate'
+	current_table = get_current_table(table)
+	data['table_number'] = table
+	data['coordinates'] = current_table.fields_title()
+	data['id_index'] = current_table.get_index_id()
+	data['title_columns'] = current_table.fields_title()
+	return render_template('analytics.html', **data)
+
+
+@app.route('/analytics/<int:table>/<int:x>/<int:y>', methods=['GET'])
+def build_grouping(table, x, y):
+	data = get_metadate()
+	if table < 0 or table >= len(data['tables']) : return
+	if not table in [4, 5, 8]: return 
+
+	fields_number = request.args.getlist('fields_number[]', type=int)
+	compare_number = request.args.getlist('comparison_operators[]', type=int)
+	values = request.args.getlist('values[]')
+	logical_number = request.args.get('logical_operation', type=int)
+	target_table = request.args.getlist('target_table[]', type=int)
+	current_table = get_current_table(table)
+	data['index_id'] = current_table.get_index_id()
+
 	try:
-		values = current_table.convert_values(fields_number=fields_number, values=values)
-		sql = current_table.select(target_number= [x]+[y]+target_table, fields_number=fields_number,
-								   comparison_operators=comparison_operators, logical_operator=logical_operator,
-								   sorted_fields_number=sorted_fields_number)
-
-		entries = execute(sql, values)
+		conditions = cond.Conditions(columns=current_table.convert_to_columns(fields_number),
+									 comparison_number=compare_number,
+									 logical_number=logical_number,
+									 values=values)
+		entries = current_table.select(conditions=conditions, sorted_fields_number=[x] + [y],
+									   target_number=[x] + [y] + [data['index_id']] + target_table)
 	except ValueError:
-		data = {}
 		data['error'] = 1
 		return jsonify(data)
 
 	tables = dict()
 	x_fields = OrderedDict()
 	y_fields = OrderedDict()
-
-	print(entries)
+	id_for_x_y = current_table.get_data_for_edit_card()
 
 	for entry in entries:
 		e_x = str(entry[0])
@@ -277,22 +140,103 @@ def build_table(x, y):
 		if not e_y in tables[e_x]:
 			tables[e_x][e_y] = list()
 		tables[e_x][e_y].append(entry[2::])
-		x_fields[e_x] = 1
-		y_fields[e_y] = 1
-	
-	data = {}
+
+		x_fields[e_x] = [x[1] for x in id_for_x_y[x].get('values') if x[0] == e_x][0]
+		y_fields[e_y] = [x[1] for x in id_for_x_y[y].get('values') if x[0] == e_y][0]
+
+	data['index_id'] = current_table.get_index_id()
 	data['error'] = 0
-	data['x_fields'] = list(x_fields.keys())
-	data['y_fields'] = list(y_fields.keys())
+	data['x_fields'] = list([k, v] for k, v in x_fields.items())
+	data['y_fields'] = list([k, v] for k, v in y_fields.items())
 	data['tables'] = tables
-	
-	print(data['x_fields'], data['y_fields'] )
-	print(data['tables'])
+
+	print(data)
 	print('KeK')
 
 	return jsonify(data)
 
-	
+
+@app.route('/update/<int:table>', methods=['GET'])
+@app.route('/update/<int:table>/<int:id_row>', methods=['GET'])
+def create_update_card(table=None, id_row=None):
+	data = get_metadate()
+	if table < 0 or table >= len(data['tables']): return
+
+	current_table = get_current_table(table)
+	data['legend'] = 'Обновление записи с идентификатор ' + str(id_row)
+	data['table_number'] = table
+	data['title_columns'] = current_table.fields_title()
+	data['edit_card'] = current_table.get_data_for_edit_card()
+	data['index_id'] = current_table.get_index_id()
+	data['cur_id'] = id_row
+	data['current_row'] = current_table.get_row_by_id(id_row)
+	return render_template("update.html", **data)
+
+@app.route('/update/<int:table>', methods=['POST'])
+@app.route('/update/<int:table>/<int:id_row>', methods=['POST'])
+def update_row(table=None, id_row=None):
+	data = get_metadate()
+	if table < 0 or table >= len(data['tables']): return
+
+	current_table = get_current_table(table)
+	data['edit_card'] = current_table.get_data_for_edit_card()
+	data['current_row'] = current_table.get_row_by_id(id_row)
+	data['index_id'] = current_table.get_index_id()
+
+	values = request.form.getlist('values[]')
+	fields_number = request.form.getlist('fields_number[]', type=int)
+	print("dd", values)
+	try:
+		values = current_table.convert_values(values, fields_number)
+		current_table.update_by_id(id=id_row, values=values, updated_fields_number=fields_number)
+		data['current_row'] = current_table.get_row_by_id(id_row)
+		data['current_row'] = current_table.get_row_by_id(id_row)
+		data['error'] = 0
+	except ValueError:
+		data['error'] = 1
+	return jsonify(data)
+
+
+@app.route('/insert/<int:table>', methods=['GET'])
+def create_insert_card(table=None):
+	data = get_metadate()
+	if table < 0 or table >= len(data['tables']): return
+
+	current_table = get_current_table(table)
+	data['legend'] = 'Вставить новую запись в таблицу ' + current_table.caption
+	data['table_number'] = table
+	data['index_id'] = current_table.get_index_id()
+	data['title_columns'] = current_table.fields_title()
+	data['edit_card'] = current_table.get_data_for_edit_card()
+	return render_template('insert.html', **data)
+
+
+@app.route('/insert/<int:table>', methods=['POST'])
+def insert_row(table):
+	data = get_metadate()
+	if table < 0 or table >= len(data['tables']): return
+
+	current_table = get_current_table(table)
+	values = request.form.getlist('values[]')
+	try:
+		values = current_table.convert_values(values)
+		current_table.insert_row(values)
+		data['error'] = 0
+	except ValueError:
+		data['error'] = 1
+	return jsonify(data)
+
+@app.route('/delete/<int:table>/<int:id_row>', methods=['POST'])
+def delete_row(table, id_row):
+	data = get_metadate()
+	if table < 0 or table >= len(data['tables']): return
+
+	current_table = get_current_table(table)
+	current_table.get_row_by_id(id_row)
+	current_table.delete_by_id(id_row)
+
+	data = {}
+	return jsonify(data)
 
 
 if __name__ == "__main__":

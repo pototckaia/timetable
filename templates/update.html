@@ -3,41 +3,40 @@
 
 <div class="panel panel-default">
 	
-	<meta id="my-meta" data-len="{{ title_columns|length }}" data-id="{{ cur_id }}">
+	<meta id="my-meta" data-len="{{ title_columns|length }}" data-id="{{ cur_id }}" data-indexid="{{ index_id }}">
 
 	<div class="panel-heading">
-		<h3 class="panel-title"> {{ legend }}  </h3>  
-		{% if error == 1%} <p class ="text-center">	<br/> Проверти введенные данные  </p> {% endif %}
-		
+		<h3 class="panel-title"> {{ legend }}  </h3>
+		<p class ="text-center" id="error"></p>
 	</div>
 
-	<form method="post">
 	<div class="panel-body">
 		{% for title in title_columns %}
+            {% if index_id != loop.index0 %}
 		<div class="form-group">
-			<label for='{{ loop.index0 }}' > {{ title }} 
+			<label for='{{ loop.index0 }}' > {{ title }}
 				<br/> Текущие значение записи:  {{ current_row[loop.index0] }}  
 			</label>
-			{% if output_values[loop.index0]["type"] == "select" %}
+			{% if edit_card[loop.index0]["type"] == "select" %}
 			{% set outer_loop  = loop %}
 			<select class="form-control" id="{{ loop.index0 }}" name='{{ loop.index0 }}'>
-				{% for tip in output_values[loop.index0]["values"] %}
+				{% for tip in edit_card[loop.index0]["values"] %}
 					<option value={{ tip[1] }}  
-					{% if tip[0] == current_row[outer_loop.index0] %} selected  {% endif %} > {{tip[0]}}  </option>
+					{% if tip[0] == current_row[outer_loop.index0] %} selected  {% endif %} >
+                        {% if tip[0] == 'None'%}  {% else %} {{  tip[0] }} {% endif %} </option>
 				{% endfor %}
 			</select>
 			{% else %}
 			<input class="form-control" id='{{ loop.index0 }}' name='{{ loop.index0 }}' 
-			type='{{ output_values[loop.index0]['type'] }}' value='{{ current_row[loop.index0]}}'>
+			type='{{ edit_card[loop.index0]['type'] }}' value='{{ current_row[loop.index0]}}'>
 			{% endif %}
 		</div>
+            {% endif %}
 		{% endfor %}
-		<button id="save" type="submit" class="btn btn-sm btn-success">Сохранить</button>
+		<button id="save" type="button" class="btn btn-sm btn-success">Сохранить и выйти</button>
 		<button id="delete" type="button" class="btn btn-sm btn-danger">Удалить запись и выйти</button>
-		<button id="come_back" type="button" class="btn">Вернуться назад</button>
+		<button id="come_back" type="button" class="btn">Выйти</button>
 	</div>
-
-	</form>
 </div>
 
 {% endblock%}
@@ -47,18 +46,49 @@
 	$(function(){
 		$("button#come_back").on("click", come_back)
 		$("button#delete").on("click", delete_row)
+        $("button#save").on("click", update_row)
 	
 	})
 
 	function delete_row(){
 		var $this = $(this)
-		$.post("{{ url_for('delete_row', table=table, id_row=cur_id) }}",
+		$.post("{{ url_for('delete_row', table=table_number, id_row=cur_id) }}",
 			function(data){
 				come_back()	
 			}
 		)
-
 	}
+
+	function update_row(){
+        var $this = $(this)
+        var $meta = $('#my-meta')
+        var len = {{ title_columns|length }}
+        var id_row = {{  cur_id  }}
+        var index_id = {{ index_id }}
+
+        var data = {}
+        data.values = []
+        data.fields_number = []
+        for (var i = 0; i < len; i++){
+            if (i == index_id){
+                continue}
+            data.values.push($("#"+String(i)).val())
+            data.fields_number.push(i)
+        }
+        $.post("{{ url_for('update_row', table=table_number, id_row=cur_id) }}",
+            data,
+            function(data){
+                if (data.error === 1) {
+                    console.log("LLLLLLL")
+                    $("#error").html("Проверти введенные данные ")
+				}else {
+                    $("#error").text("")
+                    come_back()
+                }
+            }
+        )
+
+    }
 
 	function come_back(){
 		window.opener.onchildclose()

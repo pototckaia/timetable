@@ -2,7 +2,6 @@
     <div class="col">
         <div class="form-group"> 
         	<button id="add_where" type="button" class="btn btn-default">Добавить условие</button>
-       
         	<select name="logical_operations"  class ="form-control">
             	{% for x in logical_operations %}
                 	<option value= {{ loop.index0 }}> {{ x }} </option>

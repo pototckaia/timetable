@@ -3,11 +3,8 @@
 {% block body %}
 
 {{ super() }}
-
-<div class="container">
-	{% if table_number != -1 %}
-
-	<div class="col-lg-2">
+    {% if table_number != -1 %}
+	<div class="form-group col-lg-2">
         <div class="form-group">
 			<button id="insert" type="button" class="btn">Вставить новую запись</button>
 		</div>
@@ -32,7 +29,7 @@
         <table class="entries table table-bordered table-hover">
 		    <thead>
 			    <tr>
-				    {% for header in title %}
+				    {% for header in title_columns %}
 				    <th id={{ loop.index0 }}> {{ header }}
                     </th>
 				    {% endfor %}
@@ -50,16 +47,29 @@
         </table>
     </div>
     {% endif %}
-</div>
 {% endblock%}
 
 {% block js %}
 <script type="text/javascript">
 	{{ super() }}
 
+    var fields = []
+    {% for t in title_columns -%}
+    fields.push("{{ t }}")
+    {% endfor %}
+
+    var compares = []
+    {% for c in comparison_operators %}
+    compares.push("{{ c }}")
+    {% endfor %}
+
+    var sorted_fields = []
+
 	var table_number = {{ table_number }}
     var count_page = {{ count_page }}
     var page_number = {{ page_number }}
+
+        {% include 'js/conditions.js' %}
 
     function send_parameters() {
 		$this = $(this)
@@ -92,7 +102,7 @@
 
 		$.get("{{ url_for('get_table', table=table_number) }}", data,
 			function(data){
-
+                console.log(data)
 				if (data.error === 1) {
                     $this.text("Проверти введенные данные")
                     $this.attr("class", "btn btn-sm btn-danger")
@@ -126,6 +136,22 @@
 		$table.append($tbody)
     }
 
+    function add_or_remove_sort(){
+        var $this = $(this)
+        var index_sorted = sorted_fields.indexOf($this.attr("id"))
+        if (index_sorted == -1){
+            sorted_fields.push($this.attr("id"))
+            $this.addClass("active")
+            var $i = $("<i>", {"class":"fa fa-sort-asc", "aria-hidden":"true"})
+            $this.append($i)
+        }
+        else {
+            sorted_fields.splice(index_sorted, 1)
+            $this.removeClass("active")
+            $this.find("i").remove()
+        }
+        send_parameters()
+    }
 
     function update_pagination(count, selected_page) {
 		$this = $("ul#pagination")
@@ -185,12 +211,10 @@
     function open_update_editor(){
     	var id = $(this).data("id")
     	var w = window.open("/update/" + table_number + "/" + id)
-    	console.log(w)
     }
 
     function open_insert_editor(){
-    	window.open("{{ url_for('window_insert', table=table_number) }}")
-    	//w.onclose = send_parameters
+    	window.open("{{ url_for('create_insert_card', table=table_number) }}")
     }
 
 	$(function(){	

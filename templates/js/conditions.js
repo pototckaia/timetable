@@ -1,18 +1,3 @@
-
-var fields = []
-{% for t in title -%}
-fields.push("{{ t }}")
-{% endfor %}
-
-var compares = []
-{% for c in comparison_operators %}
-compares.push("{{ c }}")
-{% endfor %}
-    
-var sorted_fields = []
-
-
-
 function add_button(){
 	var $fieldset = $("fieldset")
 	var $d_col = $("<div>", { "class": "col" })
@@ -57,21 +42,4 @@ function remove_condition(but) {
 	 		$statements.eq(i).remove()
 	page_number = 0
 	send_parameters()
-}
-
-function add_or_remove_sort(){
-    var $this = $(this)
-    var index_sorted = sorted_fields.indexOf($this.attr("id"))
-    if (index_sorted == -1){
-        sorted_fields.push($this.attr("id"))
-        $this.addClass("active")
-        var $i = $("<i>", {"class":"fa fa-sort-asc", "aria-hidden":"true"})
-        $this.append($i)
-    }
-    else {
-        sorted_fields.splice(index_sorted, 1)
-        $this.removeClass("active")
-        $this.find("i").remove()
-    }
-    send_parameters()
 }

@@ -3,39 +3,37 @@
 
 <div class="panel panel-default">
 	
-	<meta id="my-meta" data-len="{{ title_columns|length }}" data-id="{{ cur_id }}">
+	<meta id="my-meta" data-len="{{ title_columns|length }}">
 
 	<div class="panel-heading">
-		<h3 class="panel-title"> {{ legend }}  
-		</h3>  
-		
-		{% if error == 1%} <p class ="text-center">	<br/> Проверти введенные данные  </p> {% endif %}
+		<h3 class="panel-title"> {{ legend }}</h3>
+		<p class ="text-center" id="error"></p>
 		
 	</div>
 
-	<form method="post">
 	<div class="panel-body">
 		{% for title in title_columns %}
+            {% if index_id != loop.index0 %}
 			<div class="form-group">
 				<label for='{{ loop.index0 }}' > {{ title }} </label>
-				{% if output_values[loop.index0]["type"] == "select" %}
+				{% if edit_card[loop.index0]["type"] == "select" %}
 				{% set outer_loop  = loop %}
-				<select class="form-control" id="{{ loop.index0 }}" name='{{ loop.index0 }}'>
-					{% for tip in output_values[loop.index0]["values"] %}
-						<option value={{ tip[1] }}> {{tip[0]}}  </option>
+				<select  class="form-control" id="{{ loop.index0 }}" name='{{ loop.index0 }}'>
+					{% for tip in edit_card[loop.index0]["values"] %}
+						<option value={{ tip[1] }}> {% if tip[0] == 'None'%}  {% else %} {{  tip[0] }} {% endif %}</option>
 					{% endfor %}
 				</select>
 				{% else %}
 				<input class="form-control" id='{{ loop.index0 }}' name='{{ loop.index0 }}' 
-				type='{{ output_values[loop.index0]['type'] }}'>
+				type='{{ edit_card[loop.index0]['type'] }}'>
 				{% endif %}
 			</div>
+            {% endif %}
 		{% endfor %}
-		<button id="save" type="submit" class="btn btn-sm btn-success">Сохранить и выйти</button>
+		<button id="save" type="button" class="btn btn-sm btn-success">Сохранить и выйти</button>
 		<button id="come_back" type="button" class="btn">Вернуться назад</button>
 	</div>
 
-	</form>
 </div>
 
 {% endblock%}
@@ -44,14 +42,47 @@
 <script type="text/javascript">
 	$(function(){
 		$("button#come_back").on("click", come_back)
-		{% if window_close is defined %}
-			come_back()
-		{% endif %}
+		$("button#save").on("click", insert_row)
 	})
 	function come_back(){
 		window.opener.onchildclose()
 		window.close()
 	}
+
+	function insert_row(){
+        var $this = $(this)
+        var len = {{ title_columns|length }}
+        var index_id = {{ index_id }}
+
+        var data = {}
+        data.values = []
+        for (var i = 0; i < len; i++){
+            if (i == index_id){
+                continue}
+            data.values.push($("#"+String(i)).val())
+        }
+        $.post("{{ url_for('insert_row', table=table_number) }}",
+            data,
+            function(data){
+                if (data.error === 1) {
+                    console.log("LLLLLLL")
+                    $("#error").html("Проверти введенные данные ")
+				}else {
+                    $("#error").text("")
+                    come_back()
+                }
+            }
+        )}
+
+    function set_value(value, index){
+	    var $set = $("#"+index)
+        $set.val(value).change()
+    }
+
+    function set_freeze(index){
+        var $set = $("#"+index)
+        $set[0].disabled = true
+    }
 
 </script>
 {% endblock %}

@@ -278,7 +278,7 @@
         data.fields_number.push(x)
         data.fields_number.push(y)
 
-        $.post("{{ url_for('update_row', table=table_number) }}" + "/" + String(id_row),
+        $.post("{{ url_for('update_row', table=table_number) }}/" + id_row,
             data,
             function(data){
                 if (data.error === 1) {

@@ -63,7 +63,9 @@ class BaseTable:
 
 	@staticmethod
 	def tables():
-		return sorted(tuple(subclass() for subclass in BaseTable.__subclasses__()), key=lambda x: x.caption)
+		return sorted([AudiencesTable(), LessonsTable(), GroupsTable(), LessonTypesTable(),
+			SubjectGroupTable(), SubjectsTable(), TeachersTable(), WeekdaysTable(),
+			SchedItemsTable(), SubjectTeacherTable()], key=lambda x: x.caption)
 
 	def convert_to_columns(self, fields_number):
 		columns = self.columns()
@@ -91,7 +93,28 @@ class BaseTable:
 		p = () if not pagination else pagination
 		return execute(sel.query(), tuple(p) + tuple(values))
 
-#######
+	def get_conflict_by_id(self, id):
+		conf_table = ConflictTable()
+		type_conf = TypeConflict()
+
+		sel = sql.Select(conf_table)
+		sel.add_options(left_joins=[conf_table._columns['id_type'].reference, ])
+
+		target_columns = [conf_table._columns['id_row_from'].real_name, conf_table._columns['id_type'].target]
+		sorted_columns = [type_conf._columns['order_number'].target, ]
+		sel.add_options(sorted_fields=sorted_columns, fields=target_columns)
+
+		cond = c.Condition(field=conf_table._columns['id_row_to'].real_name, compare_operator=c.Equality())
+		cc = c.Conditions()
+		cc.append(cond=cond, val=id)
+		sel.add_options(conditions=cc)
+		return execute(sel.query(), (id,))
+
+	def get_all_conflicts(self):
+		sql = 'SELECT r.ID_ROW_TO, r.ID_ROW_FROM, t.name FROM CONFLICT_IN_SCHED r inner join type_conflict t ' \
+			  'on r.id_type = t.id where r.id_row_to < r.id_row_from order by t.order_number, r.id_row_to'
+		return execute(sql)
+
 
 	def get_row_by_id(self, id):
 		index_id = self.get_index_id()
@@ -103,7 +126,7 @@ class BaseTable:
 
 		if not current_values:
 			raise Exception("Строка c id " + str(id) + " в таблице " + self.caption + " уже не существует")
-		
+
 		current_values = list(current_values[0])
 		return current_values
 
@@ -282,5 +305,30 @@ class SubjectTeacherTable(BaseTable):
 				reference_field='id', target_name='name' , table_name='SUBJECT_TEACHER', not_null=True),
 			teacher_id = f.ForeignKey(name='teacher_id', title='Идентификатор учителя', reference_table=TeachersTable(),
 				reference_field='id', target_name='name', table_name='SUBJECT_TEACHER', not_null=True),
+		)
+
+
+class TypeConflict(BaseTable):
+	def __init__(self):
+		super(TypeConflict, self).__init__(
+			'TYPE_CONFLICT',
+			'Типы конфликты',
+			id  = f.Integer('id', 'Идентификатор конфликта', 'TYPE_CONFLICT'),
+			name = f.String('name', 'Название конфликта', 'TYPE_CONFLICT'),
+			order_number = f.Integer('order_number', 'Порядок сортировки', 'TYPE_CONFLICT', not_null=True)
+		)
+
+
+class ConflictTable(BaseTable):
+	def __init__(self):
+		super(ConflictTable, self).__init__(
+			'CONFLICT_IN_SCHED',
+			'Конфликты в рассписании',
+			id_row_to = f.ForeignKey(name='id_row_to', title='Идентификатор 1', reference_table=SchedItemsTable(),
+				reference_field='id', target_name='id', table_name='CONFLICT_IN_SCHED', not_null=True),
+			id_row_from = f.ForeignKey(name='id_row_from', title='Идентификатор 2', reference_table=SchedItemsTable(),
+				reference_field='id', target_name='id', table_name='CONFLICT_IN_SCHED', not_null=True),
+			id_type =f.ForeignKey(name='id_type', title='Идентификатор ошибки', reference_table=TypeConflict(),
+				reference_field='id', target_name='name', table_name='CONFLICT_IN_SCHED', not_null=True)
 		)
 

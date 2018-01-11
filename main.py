@@ -1,6 +1,6 @@
 from flask import Flask, request, render_template, g, jsonify
 import condition as cond
-from tables import BaseTable
+from tables import BaseTable, TypeConflict
 
 from collections import OrderedDict
 
@@ -19,7 +19,6 @@ def get_metadate():
 	data['logical_operations'] = [x.caption for x in cond.LogicalOperator.logical_operations()]
 	data['page_sizes'] = [5, 10, 15, 25]
 	data['table_number'] = -1
-	print(data['tables'])
 	return data
 
 def get_current_table(index):
@@ -131,6 +130,8 @@ def build_grouping(table, x, y):
 	y_fields = OrderedDict()
 	id_for_x_y = current_table.get_data_for_edit_card()
 
+
+
 	for entry in entries:
 		e_x = str(entry[0])
 		e_y = str(entry[1])
@@ -139,10 +140,11 @@ def build_grouping(table, x, y):
 			tables[e_x][e_y] = list()
 		if not e_y in tables[e_x]:
 			tables[e_x][e_y] = list()
-		tables[e_x][e_y].append(entry[2::])
+		conf = True if current_table.get_conflict_by_id(entry[2]) else False
+		tables[e_x][e_y].append(list(entry[3::]) + [conf, ])
 
-		x_fields[e_x] = [x[1] for x in id_for_x_y[x].get('values') if x[0] == e_x][0]
-		y_fields[e_y] = [x[1] for x in id_for_x_y[y].get('values') if x[0] == e_y][0]
+		x_fields[e_x] = [xx[1] for xx in id_for_x_y[x].get('values') if xx[0] == e_x][0]
+		y_fields[e_y] = [xx[1] for xx in id_for_x_y[y].get('values') if xx[0] == e_y][0]
 
 	data['index_id'] = current_table.get_index_id()
 	data['error'] = 0
@@ -150,10 +152,74 @@ def build_grouping(table, x, y):
 	data['y_fields'] = list([k, v] for k, v in y_fields.items())
 	data['tables'] = tables
 
-	print(data)
+	print(tables)
 	print('KeK')
 
 	return jsonify(data)
+
+@app.route('/conflicts_row', methods=['GET'])
+@app.route('/conflicts_row/<int:id_row>', methods=['GET'])
+def get_meta_conf(id_row=None):
+	if id_row is None:
+		return
+	data = get_metadate()
+	table = get_current_table(8)
+	data['current_row'] = table.get_row_by_id(id_row)
+	data['index_id'] = table.get_index_id()
+	data['cur_id'] = id_row
+	return render_template("conflicts.html", **data)
+
+@app.route('/conflicts_row', methods=['POST'])
+@app.route('/conflicts_row/<int:id_row>', methods=['POST'])
+def get_conflicts_row(id_row=None):
+	if id is None:
+		return
+	data = get_metadate()
+	table = get_current_table(8)
+
+	data['current_row'] = table.get_row_by_id(id_row)
+	data['index_id'] = table.get_index_id()
+	data['cur_id'] = id_row
+	data['legend'] = 'Конфликты в строке с идентификатором ' + str(id_row)
+	data['title_columns'] = table.fields_title()
+
+	conflicts = table.get_conflict_by_id(id_row)
+	conflicts = [list(x) for x in conflicts]
+	if not conflicts:
+		data['error'] = 1
+		data['conflicts'] = []
+		data['legend'] = 'У строки с идентификатором ' + str(id_row) + ' конфликтов нет'
+		return jsonify(data)
+
+	data['error'] = 0
+	for i in range(len(conflicts)):
+		conflicts[i][0] = table.get_row_by_id(conflicts[i][0])
+	data['conflicts'] = conflicts
+
+	print(conflicts)
+	return jsonify(data)
+
+@app.route("/tree_conflicts", methods=['GET'])
+def tree_conflicts():
+	data=get_metadate()
+	table = get_current_table(8)
+	entries = table.get_all_conflicts()
+	type = OrderedDict()
+	for i in range(len(entries)):
+		type_name = entries[i][2]
+		if not type_name in type:
+			type[type_name] = []
+		str_conf = str(entries[i][0]) + ' - ' + str(entries[i][1])
+		row_to = table.get_row_by_id(entries[i][0])
+		row_from = table.get_row_by_id(entries[i][1])
+		type[type_name].append([str_conf, row_to, row_from])
+
+	data['type'] = list(type.keys())
+	data['index_id'] = table.get_index_id()
+	data['title_columns'] = table.fields_title()
+	data['entries'] = type
+	print(type)
+	return render_template('tree_conflicts.html', **data)
 
 
 @app.route('/update/<int:table>', methods=['GET'])
@@ -162,7 +228,7 @@ def create_update_card(table=None, id_row=None):
 	data = get_metadate()
 	if table < 0 or table >= len(data['tables']): return
 
-	current_table = get_current_table(table)
+	current_table = get_current_table(table) # !!
 	data['legend'] = 'Обновление записи с идентификатор ' + str(id_row)
 	data['table_number'] = table
 	data['title_columns'] = current_table.fields_title()
@@ -180,7 +246,9 @@ def update_row(table=None, id_row=None):
 
 	current_table = get_current_table(table)
 	data['edit_card'] = current_table.get_data_for_edit_card()
-	data['current_row'] = current_table.get_row_by_id(id_row)
+
+	conf = True if current_table.get_conflict_by_id(id_row) else False
+	data['current_row'] = current_table.get_row_by_id(id_row) + [conf, ]
 	data['index_id'] = current_table.get_index_id()
 
 	values = request.form.getlist('values[]')
@@ -189,8 +257,9 @@ def update_row(table=None, id_row=None):
 	try:
 		values = current_table.convert_values(values, fields_number)
 		current_table.update_by_id(id=id_row, values=values, updated_fields_number=fields_number)
-		data['current_row'] = current_table.get_row_by_id(id_row)
-		data['current_row'] = current_table.get_row_by_id(id_row)
+
+		conf = True if current_table.get_conflict_by_id(id_row) else False
+		data['current_row'] = current_table.get_row_by_id(id_row) + [conf, ]
 		data['error'] = 0
 	except ValueError:
 		data['error'] = 1

@@ -1,0 +1,73 @@
+{% extends "tem.html" %}
+
+{%  block body %}
+    {{ super() }}
+
+    <div class="form-group" id="treeview_div">
+        <div class="btn-group btn-group-vertical">
+        <ul class="tree">
+            {% for name in type %}
+            <li class="tree">
+                <p style=" font-weight: bold;  text-align: center;">{{ name }}</p>
+                <ul class="tree">
+                    {%  for conflict in entries[name] %}
+                    <li  class="tree">
+                        
+                                <a class="tree">
+                                <table class="table table-hover">
+                                    <thead>
+                                    <tr>
+                                        {% for i in title_columns %}
+                                        <th>
+                                            {{ i }}
+                                        </th>
+                                        {%  endfor %}
+                                    </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                        {% for r in conflict[1] %}
+                                             <th {% if r == conflict[2][loop.index0]%}class="success"{%endif%}>
+                                            {% if r|trim == 'None' %}
+                                                <p style=" font-weight:normal; text-align: center;">{{ " " }}{{ ' ' }}</p>
+                                            {% else %}
+                                                <p style="font-weight:normal;text-align: center;">{{ r}}</p>
+                                            {% endif %}
+                                            </th>
+                                        {% endfor %}
+                                        </tr>
+                                        <tr>
+                                        {% for r in conflict[2] %}
+                                             <th {% if r == conflict[1][loop.index0]%}class="success"{%endif%}>
+                                                {% if r|trim == 'None' %}
+                                                <p style="font-weight:normal;text-align: center;">{{ ' ' }}</p>
+                                            {% else %}
+                                                <p style="font-weight:normal;text-align: center;">{{ r }}</p>
+                                            {% endif %}
+                                            </th>
+                                        {% endfor %}
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </a>
+                                           </li>
+                    {% endfor %}
+                </ul>
+            </li>
+            {% endfor %}
+        </ul>
+        </div>
+    </div>
+
+{% endblock %}
+
+{% block js %}
+<script type="text/javascript">
+
+    $(function(){
+        /*$('#treeview_div').jstree({
+        });*/
+    })
+
+</script>
+{% endblock %}

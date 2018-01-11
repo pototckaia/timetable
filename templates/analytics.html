@@ -5,8 +5,6 @@
 
 <div class="form-group col-lg-2">
 
-    <div class="form-group col"><button id="build_table" type="button" class="btn btn-default"> Построить </button></div>
-
     <div class="col">
 		<input type="checkbox" id="get_headers" value="l" checked>
         <label for="get_headers"><p  style="font-weight: 400;">Выводить заголовки</p> </label>
@@ -42,6 +40,8 @@
         </div>
     </div>
 
+    <div class="form-group col"><button id="build_table" type="button" class="btn btn-default"> Построить </button></div>
+
 	<div class="form-group">
     	<h5> Условия </h5>
     	{% include "conditions.html" %}
@@ -75,7 +75,12 @@
 
 
 	function send_parameters(){
-    	var data = {}
+        var $buttom = $("button#build_table")
+        $buttom.text("Построить")
+        $buttom.removeClass("btn-danger")
+        $buttom.attr("class", "btn btn-default")
+
+        var data = {}
 		var field_ops = $("select[name='fields_number']").find(":selected")
 		var comp_ops = $("select[name='comparison_operators']").find(":selected")
 		var logical = $("select[name='logical_operations']").find(":selected")
@@ -83,7 +88,12 @@
 
         var x = $("select#x").find(":selected").val()
         var y = $("select#y").find(":selected").val()
-        var target_table = $("input[name='option']:checked")
+        if (x === y){
+    	    $buttom.text("x и y не могу быть одинаковыми")
+            $buttom.attr("class", "btn btn-sm btn-danger")
+            return
+        }
+        var target_table = $("input[name='option']")
         var title = []
 
         data.fields_number= []
@@ -106,7 +116,6 @@
 		$.get("/analytics/{{ table_number }}/" + x + "/" + y,
 			data,
 			function(data){
-                var $buttom = $("button#build_table")
 				if (data.error === 1) {
                     $buttom.text("Проверти введенные данные")
                     $buttom.attr("class", "btn btn-sm btn-danger")
@@ -115,190 +124,33 @@
                     $buttom.removeClass("btn-danger")
                     $buttom.attr("class", "btn btn-default")
                 }
-				create_grouping(data.x_fields, data.y_fields, data.tables, title)
+				create_grouping(data.x_fields, data.y_fields, data.tables)
 			})
 		return false
     }
 
-    function create_list(entries, captions, where){
-		for (var i = 0; i < entries.length; i++) {
-            var $ul = $("<ul>", {"class": "list_row list-group list-group-item-action"})
 
-            var $div_i = $("<div>", {"class": "col ul_row", 'id': String(i), "data-id": entries[i][0]})
-            $div_i.draggable({
-                zIndex: 100,
-                addClasses: false,
-                helper: "clone",
-                containment: $("table.grouping"),
-                scroll: true
-            })
-
-            var $li = $("<li>", {"class": "list-group-item"})
-            $li.css({"text-align": "center"})
-
-            for (var j = 1; j < entries[i].length; j++) {
-			    var text = ''
-			    if (captions[j - 1] !== ''){ text = captions[j - 1] + "  : <br/> " }
-                text += entries[i][j]
-
-                var $li_c = $li.clone()
-                $li_c.html(text)
-				$ul.append($li_c)
-			}
-
-			var $button = $("<button>", {"class": "btn btn-link", "name": "update", "data-id": entries[i][0]}).text('Редактировать')
-            $button.on("click", open_update_editor)
-
-            $li.append($button)
-            $ul.append($li)
-
-            $div_i.append($ul)
-            where.append($div_i)
-		}
-    }
-
-    function create_grouping(x_fields, y_fields, entries, title){
-    	var displayTitle = $('#get_headers:checked').length > 0
-        var $grouping = $("table.grouping")
-        $grouping.children().remove()
-
-    	
-    	var title_tables = []
-    	if (displayTitle){
-    		title_tables = title
-    	}
-    	else{
-    	    title_tables = []
-            for (var i = 0; i < title.length; i++){
-    	        title_tables.push('')
-            }
-        }
-
-    	var $thead = $("<thead>")
-    	var $tr = $("<tr>")
-    	$tr.append($("<th>"))
-    	for (var i = 0; i < x_fields.length; i++){
-    		$th = $("<th>").text(x_fields[i][0])
-    		$th.css({"text-align": "center"})
-    		$tr.append($th)
-    	}
-    	$thead.append($tr)
-    	$grouping.append($thead)
-
-    	$tbody = $("<tbody>")
-
-
-    	for (var i = 0; i < y_fields.length; i++){
-    		var $tr = $("<tr>")
-    		var $th = $("<th>").text(y_fields[i][0])
-    		$th.css({"text-align": "center"})
-    		$tr.append($th)
-    		for (var j = 0; j < x_fields.length; j++){
-
-    		    var $td = $("<td>", {"data-xval": x_fields[j][1], "data-yval": y_fields[i][1]})
-
-                var $button_insert = $("<button>", {"class": "btn btn-sm btn-success", "name":"insert"}).text("+")
-                $button_insert.on("click", open_insert_editor)
-                $td.append($button_insert)
-
-                var $button_hidden = $("<button>", {"class": "btn btn-sm btn-default", "name":"insert"})
-                var $span = $("<span>", {"class": "tt"}).text("Скрыть")
-                var $i = $("<i>", {"class":"fa fa-sort-asc", "aria-hidden":"true"})
-                $button_hidden.append($i)
-                $button_hidden.append($span)
-                $button_hidden.on("click", show_or_hide)
-                $td.append($button_hidden)
-
-                $td.droppable({
-                    addClasses: false,
-                    drop: drop_tr
-                })
-
-                if (y_fields[i][0] in entries[x_fields[j][0]]){
-                    create_list(entries[x_fields[j][0]][y_fields[i][0]], title_tables, $td)
-    			}
-
-    			$tr.append($td)
-    		}
-    		$tbody.append($tr)
-    	}
-    	$grouping.append($tbody)
-    	
-    }
-
-    function show_or_hide(){
-
-        var $div = $(this).parent()
-        var min_i = $("#show_count").val()
-        var $text =$(this).children(".tt")
-        var $i = $(this).children(".fa")
-        var hidden = $i.hasClass("fa-sort-desc")
-        if ($i.hasClass("fa-sort-asc")){
-            $text.text("Показать")
-            $i.removeClass("fa-sort-asc")
-            $i.addClass("fa-sort-desc")
-        }
-        else {
-            $text.text("Скрыть")
-            $i.removeClass("fa-sort-desc")
-            $i.addClass("fa-sort-asc")
-        }
-
-        console.log(' ')
-        $div.children(".ul_row").each(
-            function(i){
-                var $div = $(this)
-                if (i < min_i || hidden){
-                    $div.removeClass("hidden")
-                }
-                else if (!hidden){
-                    $div.addClass("hidden")
-                }
-            }
-        )
-    }
-
-    function drop_tr(event, ui) {
-        var x = $("select#x").find(":selected").val()
-        var y = $("select#y").find(":selected").val()
-        var $this = $(this)
-        var x_val = $(this).data("xval")
-        var y_val = $(this).data("yval")
-        if (x === y){return }
-
-        var inventor = ui.draggable;
-        var id_row = inventor.data("id")
-        var $helper = $(ui.helper)
-
-        var data = {}
-        data.values = []
-        data.values.push(x_val);
-        data.values.push(y_val);
-        data.fields_number = []
-        data.fields_number.push(x)
-        data.fields_number.push(y)
-
-        $.post("{{ url_for('update_row', table=table_number) }}/" + id_row,
-            data,
-            function(data){
-                if (data.error === 1) {
-                    console.log("LLLLLLL")
-				}else {
-                    $new_ul = create_ul($(inventor).find('ul'), data.current_row)
-                    $(inventor).find('ul').remove()
-                    $(inventor).append($new_ul)
-
-                    $this.append(inventor[0]);
-                    $helper.remove();
-                }
-            }
-        )
-    }
-
-    function create_ul(ul, row){
+    function create_ul(row, index_id){
         var target_table = $("input[name='option']:checked")
         var title = []
         var displayTitle = $('#get_headers:checked').length > 0
+        var isConflict = row[row.length - 1]
+
+
+        var $div_i = $("<div>", {"class": "col ul_row", 'id': String(row[index_id]), "data-id": String(row[index_id])})
+        $div_i.draggable({
+            zIndex: 100,
+            addClasses: false,
+            helper: "clone",
+            containment: $("table.grouping"),
+            scroll: true
+        })
+        var table_number = {{ table_number }}
+        if (isConflict && table_number == 8){
+            var $button_conf = $("<button>", {"class": "btn btn-danger", "name": "conflict", "data-id": row[index_id]}).text('!')
+            $button_conf.on("click", open_conflict_list)
+            $div_i.append($button_conf)
+        }
 
         for (var i = 0; i < target_table.length; i++){
             title.push(target_table.eq(i).parent().text())
@@ -319,12 +171,171 @@
             $ul.append($li_c)
         }
 
-        var $button = ul.find("button[name='update']").clone()
-        $button.on('click', open_update_editor)
+        var $button = $("<button>", {"class": "btn btn-link", "name": "update", "data-id": row[index_id]}).text('Редактировать')
+        $button.on("click", open_update_editor)
 
         $li.append($button)
         $ul.append($li)
-        return $ul
+        $div_i.append($ul)
+        return $div_i
+    }
+
+
+    function create_list(entries, where){
+		for (var i = 0; i < entries.length; i++) {
+            var $div_i = create_ul(entries[i], 0)
+            where.append($div_i)
+		}
+    }
+
+    function create_grouping(x_fields, y_fields, entries){
+        var $grouping = $("table.grouping")
+        $grouping.children().remove()
+
+    	var $thead = $("<thead>")
+    	var $tr = $("<tr>")
+    	$tr.append($("<th>"))
+
+        for (var i = 0; i < x_fields.length; i++){
+    		$th = $("<th>").text(x_fields[i][0])
+    		$th.css({"text-align": "center"})
+    		$tr.append($th)
+    	}
+    	$thead.append($tr)
+    	$grouping.append($thead)
+
+    	$tbody = $("<tbody>")
+    	for (var i = 0; i < y_fields.length; i++){
+    		var $tr = $("<tr>")
+    		var $th = $("<th>").text(y_fields[i][0])
+    		$th.css({"text-align": "center"})
+    		$tr.append($th)
+    		for (var j = 0; j < x_fields.length; j++){
+    		    var $td = $("<td>", {"data-xval": x_fields[j][1], "data-yval": y_fields[i][1]})
+
+                var $button_insert = $("<button>", {"class": "btn btn-sm btn-success", "name":"insert"}).text("+")
+                $button_insert.on("click", open_insert_editor)
+                $td.append($button_insert)
+
+                var $button_hidden = $("<button>", {"class": "btn btn-sm btn-default", "name":"insert"})
+                var $span = $("<span>", {"class": "tt"}).text("Скрыть")
+                var $i = $("<i>", {"class":"fa fa-sort-asc", "aria-hidden":"true"})
+                $button_hidden.append($i)
+                $button_hidden.append($span)
+                $button_hidden.on("click", show_or_hide)
+                $td.append($button_hidden)
+
+                $td.droppable({
+                    addClasses: false,
+                    drop: drop_tr
+                })
+
+                if (y_fields[i][0] in entries[x_fields[j][0]]){
+                    create_list(entries[x_fields[j][0]][y_fields[i][0]], $td)
+    			}
+    			$tr.append($td)
+    		}
+    		$tbody.append($tr)
+    	}
+    	$grouping.append($tbody)
+    }
+
+    function show_or_hide(){
+
+        var $div = $(this).parent()
+        var cell = $(this).parent()
+
+        var min_i = $("#show_count").val()
+        var $text =$(this).children(".tt")
+        var $i = $(this).children(".fa")
+        var show = $i.hasClass("fa-sort-desc")
+        if ($i.hasClass("fa-sort-asc")){
+            $(cell).addClass("success")
+            $text.text("Показать")
+            $i.removeClass("fa-sort-asc")
+            $i.addClass("fa-sort-desc")
+        }
+        else {
+            $(cell).removeClass("success")
+            $text.text("Скрыть")
+            $i.removeClass("fa-sort-desc")
+            $i.addClass("fa-sort-asc")
+        }
+
+        $div.children(".ul_row").each(
+            function(i){
+                var $div = $(this)
+                if (i < min_i || show){
+                    $div.removeClass("hidden")
+                }
+                else if (!show){
+                    $div.addClass("hidden")
+                }
+            }
+        )
+    }
+
+    function drop_tr(event, ui) {
+        var x = $("select#x").find(":selected").val()
+        var y = $("select#y").find(":selected").val()
+        var $this = $(this)
+        var x_val = $(this).data("xval")
+        var y_val = $(this).data("yval")
+        if (x === y){return }
+
+        var draggable = ui.draggable;
+        var id_row = draggable.data("id")
+        var $helper = $(ui.helper)
+
+        var data = {}
+        data.values = []
+        data.values.push(x_val);
+        data.values.push(y_val);
+        data.fields_number = []
+        data.fields_number.push(x)
+        data.fields_number.push(y)
+
+        conflicts_prev = []
+        $.post("/conflicts_row/" + id_row, data,
+            function(dt){
+            conflicts_prev = dt.conflicts
+        })
+
+        $.post("{{ url_for('update_row', table=table_number) }}/" + id_row,
+            data,
+            function(data){
+                if (data.error === 1) {
+                    console.log("LLLLLLL")
+				}else {
+                    console.log('cur', data.current_row)
+
+                    var $div = create_ul(data.current_row, data.index_id)
+                    $this.append($div);
+                    $helper.remove();
+                    $(draggable).remove()
+                    var id_row = data.current_row[data.index_id]
+
+                    $.post("/conflicts_row/" + id_row, data,
+                        function(d){
+                            var conf = d.conflicts
+
+                            for (var i = 0; i < conflicts_prev.length; i++){
+                                $div = $("div#"+conflicts_prev[i][0][d.index_id])
+                                $div.find("button[name='conflict']").remove()
+                            }
+
+                            for (var i = 0; i < conf.length; i++){
+                                $div = $("div#"+conf[i][0][d.index_id])
+                                $div.find("button[name='conflict']").remove()
+                                console.log($div)
+                                var $button_conf = $("<button>", {"class": "btn btn-danger", "name": "conflict", "data-id": conf[i][0][d.index_id]}).text('!')
+                                $button_conf.on("click", open_conflict_list)
+                                $div.prepend($button_conf)
+                            }
+                        })
+                }
+            }
+        )
     }
 
     function open_update_editor(){
@@ -350,6 +361,11 @@
             w.set_freeze(y)
         }, true);
 
+    }
+
+    function open_conflict_list(){
+        var id = $(this).data("id")
+    	var w = window.open("/conflicts_row/" + id)
     }
 
     $(function(){

@@ -1,0 +1,133 @@
+{% extends "tem.html" %}
+
+{%  block body %}
+{{ super() }}
+
+
+<div class="panel panel-default">
+
+	<meta id="my-meta">
+
+	<div class="panel-heading">
+		<h3 class="legend panel-title"> </h3>
+	</div>
+
+	<div class="panel-body">
+        <div class="col">
+            <table class="conflicts table table-bordered table-hover"></table>
+        </div>
+        <button id="come_back" type="button" class="btn">Выйти</button>
+	</div>
+
+</div>
+
+{% endblock %}
+
+{% block js %}
+<script type="text/javascript">
+    function create_table(current_row, entries, title, index_id){
+        $("table.conflicts > tbody").remove();
+		$("table.conflicts > thead").remove();
+        var $table = $("table.conflicts ");
+
+        var $thead = $("<thead>");
+        var $tr_t = $("<tr>")
+        for (var k = 0; k < title.length; k++){
+            var $th = ('<th style="text-align: center;">'+ String(title[k]) +'</th>');
+            $tr_t.append($th);
+        }
+        $thead.append($tr_t)
+        $table.append($thead);
+
+        var $tbody = $("<tbody>");
+		var $td = $("<td>");
+        $td.css({"text-align": "center"});
+
+        var $p = $("<p>");
+        $p.css({"font-weight": "bold"});
+
+        var $tr = $("<tr>");
+        var $td_1 = $td.clone();
+        $td_1.attr({"colspan": title.length});
+        var $p_1 = $p.clone();
+        $p_1.text("Текущеее значения строки:");
+        $td_1.append($p_1);
+        $tr.append($td_1);
+        $tbody.append($tr);
+
+        $tr = $("<tr >");
+        for (var i = 0; i < current_row.length; i++){
+            $td_1 = $td.clone();
+            if (current_row[i] === 'None'){
+                $td_1.text(' ');
+            }else{
+                $td_1.text(current_row[i]);
+            }
+            $tr.append($td_1);
+        }
+        $tbody.append($tr);
+
+        console.log(entries.length)
+        for (var l = 0; l < entries.length; l++) {
+            $tr =  $("<tr>");
+            $td_1 = $td.clone();
+            $td_1.attr({"colspan": title.length});
+            $p_1 = $p.clone();
+            $p_1.text(entries[l][1]);
+            $td_1.append($p_1);
+            $tr.append($td_1);
+            $tbody.append($tr);
+
+
+            $tr = $("<tr data-id="+entries[l][0][index_id]+">");
+            $tr.on("click", open_update_editor);
+            for (var j = 0; j < entries[l][0].length; j++) {
+                $td_1 = $td.clone();
+                if (entries[l][0][j] === 'None'){
+                    $td_1.text(' ');
+                }else{
+                    $td_1.text(entries[l][0][j]);
+                }
+                $tr.append($td_1);
+            }
+            $tbody.append($tr);
+        }
+		$table.append($tbody);
+    }
+
+    function come_back(){
+		window.opener.onchildclose()
+		window.close()
+	}
+
+    function open_update_editor(){
+    	var id = $(this).data("id")
+    	var w = window.open("/update/8/" + id)
+    }
+    function update_table() {
+        data = {}
+        $.post("{{ url_for('get_conflicts_row', id_row=cur_id) }}", data,
+            function (data) {
+                $(".legend").text(data.legend)
+                if (data.error === 0) {
+                    create_table(data.current_row, data.conflicts, data.title_columns, data.index_id)
+                }
+            })
+    }
+
+    $(function(){
+        update_table()
+        $("button#come_back").on("click", come_back)
+                window.onchildclose = function() {
+			child_closed = true
+		}
+		$(window).focus(function() {
+			if (child_closed) {
+				update_table()
+				child_closed = false
+			}
+		})
+    })
+
+</script>
+{% endblock %}

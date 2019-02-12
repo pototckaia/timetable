@@ -323,7 +323,7 @@ class ConflictTable(BaseTable):
 	def __init__(self):
 		super(ConflictTable, self).__init__(
 			'CONFLICT_IN_SCHED',
-			'Конфликты в рассписании',
+			'Конфликты в расписании',
 			id_row_to = f.ForeignKey(name='id_row_to', title='Идентификатор 1', reference_table=SchedItemsTable(),
 				reference_field='id', target_name='id', table_name='CONFLICT_IN_SCHED', not_null=True),
 			id_row_from = f.ForeignKey(name='id_row_from', title='Идентификатор 2', reference_table=SchedItemsTable(),

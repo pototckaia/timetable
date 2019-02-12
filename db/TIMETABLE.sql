@@ -248,8 +248,7 @@ BEGIN
     AS CURSOR cur_row
   DO 
   BEGIN
-    IF (new.ID = cur_row.ID)
-    THEN CONTINUE; 
+    IF (new.ID = cur_row.ID) THEN CONTINUE; 
     
     IF (new.ID != cur_row.ID and 
         ((new.AUDIENCE_ID is null and cur_row.AUDIENCE_ID is null) or new.AUDIENCE_ID = cur_row.AUDIENCE_ID) and 
